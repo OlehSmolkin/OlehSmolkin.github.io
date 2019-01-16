@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src = "https://d3js.org/d3.v3.min.js"></script>
+  <style type="text/css">
+  svg {
+    font: 10px sans-serif;
+    shape-rendering: crispEdges;
+  }
+  h2{
+	  text-align: center;
+  }
+  .axis path,
+  .axis line {
+    fill: none;
+    stroke: #000;
+  }
+
+  path.domain {
+    stroke: none;
+  }
+
+  .y .tick line {
+    stroke: #ddd;
+  }
+  </style>
+
+</head>
+<body>
+<H2> Народжуваність за віковими групами матерів (1989-2017) </H2>
+<script type="text/javascript">
+
+// Setup svg using Bostock's margin convention
+
+var margin = {top: 20, right: 160, bottom: 35, left: 50};
+
+var width = 1300 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var svg = d3.select("body")
+  .append("svg")
+  .attr("width", width + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+/* Data in strings like it would be if imported from a csv */
+
+d3.csv("static/birth.csv", function(data){
+	var parse = d3.time.format("%Y").parse;
+
+
+	console.log(data)
+	var ages = ["15-19","20-24","25-29","30-34","35-39","40-44"];
+	// Transpose the data into layers
+	var dataset = d3.layout.stack()(ages.map(function(age) {
+	  return data.map(function(d) {
+		return {x: parse(d.year), y: +d[age], key: age};
+	  });
+	}));
+
+	console.log(dataset)
+
+	// Set x, y and colors
+	var x = d3.scale.ordinal()
+	  .domain(dataset[0].map(function(d) { return d.x; }))
+	  .rangeRoundBands([10, width-10], 0.02);
+
+	var y = d3.scale.linear()
+	  .domain([0, d3.max(dataset, function(d) {  return d3.max(d, function(d) { return d.y0 + d.y; });  })])
+	  .range([height, 0]);
+	var colors = ["#1a9850", "#91cf60", "#d9ef8b", "#fee08b", "#fc8d59", "#d73027"];
+
+
+      svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("transform", "translate("+ -30 +","+(height/2+20)+")rotate(-90)")
+      .style("font-size", "15px")
+      .text("Народжених (тис.)");
+	// Define and draw axes
+	var yAxis = d3.svg.axis()
+	  .scale(y)
+	  .orient("left")
+	  .ticks(5)
+	  .tickSize(-width, 0, 0)
+	  .tickFormat( function(d) { return d/1000 } );
+
+	var xAxis = d3.svg.axis()
+	  .scale(x)
+	  .orient("bottom")
+	  .tickFormat(d3.time.format("%Y"));
+
+	svg.append("g")
+	  .attr("class", "y axis")
+	  .call(yAxis);
+
+	svg.append("g")
+	  .attr("class", "x axis")
+	  .attr("transform", "translate(0," + height + ")")
+	  .call(xAxis);
+
+	// Create groups for each series, rects for each segment
+
+	draw_plot(dataset, colors, "all");
+
+	function draw_plot(_data, _colors, flag){
+		console.log(_colors);
+		var plot = svg
+			.append("g")
+			.attr("class", "plot " + flag)
+			.on("mouseleave", function(d) {
+			    console.log("aaaa", d);
+			    if(flag=="filter"){
+					d3.selectAll("g.plot").remove();
+					draw_plot(dataset, colors, "all")
+				}
+			});
+
+
+		var groups = plot.selectAll("g.cost")
+		  .data(_data)
+		  .enter().append("g")
+		  .attr("class", "cost")
+		  .style("fill", function(d, i) { return _colors[i]; });
+
+		var rect = groups.selectAll("rect")
+		  .data(function(d) { return d; })
+		  .enter()
+		  .append("rect")
+		  .attr("x", function(d) { return x(d.x) +  x.rangeBand()*0.3; })
+		  .attr("y", function(d) { return y(d.y0 + d.y); })
+		  .attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); })
+		  .attr("width", x.rangeBand()*0.7)
+		  .attr("class", flag)
+		  .on("mouseover", function(d) {
+		  	if(flag == "all"){
+		  	    d3.selectAll("g.plot").remove();
+			  	//tooltip.style("display", null);
+			  	var _colors = [colors[ages.indexOf(d.key)], "Gainsboro", "Gainsboro", "Gainsboro", "Gainsboro", "Gainsboro", "Gainsboro"]
+			  	var _ages = ages.slice();
+			  	[_ages[ages.indexOf(d.key)], _ages[0]] = [_ages[0], _ages[ages.indexOf(d.key)]];
+
+				var _dataset = d3.layout.stack()(_ages.map(function(age) {
+				  return data.map(function(d) {
+					return {x: parse(d.year), y: +d[age], key: age};
+				  });
+				}));
+				console.log(_dataset)
+				draw_plot(_dataset, _colors, "filter")
+		  	}
+		  })
+		  .on("mouseout", function() {
+		  })
+		  /*.on("mousemove", function(d) {
+			var xPosition = d3.mouse(this)[0] - 15;
+			var yPosition = d3.mouse(this)[1] - 25;
+			tooltip.attr("transform", "translate(" + xPosition + "," + yPosition + ")");
+			tooltip.select("text").text(d.y);
+		  });*/
+
+	}
+
+
+	// Draw legend
+	var legend = svg.selectAll(".legend")
+	  .data(colors)
+	  .enter().append("g")
+	  .attr("class", "legend")
+	  .attr("transform", function(d, i) { return "translate(30," + i * 19 + ")"; });
+
+	legend.append("rect")
+	  .attr("x", width - 18)
+	  .attr("width", 18)
+	  .attr("height", 18)
+	  .style("fill", function(d, i) {return colors.slice().reverse()[i];});
+
+	legend.append("text")
+	  .	attr("x", width + 5)
+	  .attr("y", 9)
+	  .attr("dy", ".35em")
+	  .style("text-anchor", "start")
+	  .text(function(d, i) {
+		switch (i) {
+		  case 5: return "15-19";
+		  case 4: return "20-24";
+		  case 3: return "25-29";
+		  case 2: return "30-34";
+		  case 1: return "35-39";
+		  case 0: return "40-44";
+		}
+	  });
+
+
+	// Prep the tooltip bits, initial display is hidden
+	var tooltip = svg.append("g")
+	  .attr("class", "tooltip")
+	  .style("display", "none");
+
+	tooltip.append("rect")
+	  .attr("width", 30)
+	  .attr("height", 20)
+	  .attr("fill", "white")
+	  .style("opacity", 0.5);
+
+	tooltip.append("text")
+	  .attr("x", 15)
+	  .attr("dy", "1.2em")
+	  .style("text-anchor", "middle")
+	  .attr("font-size", "12px")
+	  .attr("font-weight", "bold");
+});
+
+</script>
+<div id="info">
+    <p>На графіку зображено кількість народжених у 1989-2017 роках відповідно до віку матері</p>
+    <p>Якщо навести на конкретну вікову категорію, можна побачити відповідний графік відносно нуля</p>
+</div>
+</body>
+</html>
